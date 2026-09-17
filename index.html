@@ -229,11 +229,14 @@
         </div>
 
         <div class="code-input-group">
-            <input type="text" id="roomInput" value="WESLA" placeholder="ROOM" maxlength="8">
-            <button id="connectBtn" onclick="connectToRoom()">Start</button>
+            <input type="text" id="ipInput" value="172.20.10.1" placeholder="172.20.10.1" style="width: 200px; font-size: 16px; text-transform: none; letter-spacing: 0;">
+            <button id="connectBtn" onclick="connectToRoom()">Connect</button>
         </div>
 
-        <p id="modeHint" style="font-size: 13px; color: #8e8e93;">Full iPhone screen mirror — start broadcast in WeslaMirror app.</p>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <span style="font-size: 12px; color: #8e8e93;">Hotspot IP: Check WeslaMirror app screen on iPhone</span>
+        </div>
+        <p id="modeHint" style="font-size: 13px; color: #8e8e93;">Make sure "Broadcast Screen" is active in WeslaMirror on your iPhone.</p>
     </div>
 
     <div class="floating-controls">
@@ -280,10 +283,11 @@
             }
         });
 
-        // Check URL parameters for room code e.g. ?room=WESLA
+        // Check URL parameters for IP and room code e.g. ?ip=172.20.10.1 or ?room=WESLA
         const urlParams = new URLSearchParams(window.location.search);
-        const initialRoom = (urlParams.get('room') || 'WESLA').toUpperCase();
-        document.getElementById('roomInput').value = initialRoom;
+        const initialIp = urlParams.get('ip') || '172.20.10.1';
+        const ipField = document.getElementById('ipInput');
+        if (ipField) ipField.value = initialIp;
 
         function initPeer() {
             const teslaPeerId = 'tesla_' + Math.random().toString(36).substr(2, 6);
@@ -339,24 +343,26 @@
             }
         }
 
+        function getCustomHost() {
+            const input = document.getElementById('ipInput');
+            return (input && input.value.trim()) ? input.value.trim() : '172.20.10.1';
+        }
+
         function connectToRoom() {
+            const host = getCustomHost();
+            statusText.innerText = 'Searching for iPhone at ' + host + '...';
+            statusDot.className = 'dot';
+
             if (currentMode === 'media') {
                 playMediaDirectly();
                 return;
             }
 
-            const room = document.getElementById('roomInput').value.trim().toUpperCase();
-            if (!room) return;
-
-            statusText.innerText = 'Connecting to iPhone (' + room + ')...';
-            statusDot.className = 'dot';
-
-            // Check if local hotspot stream is reachable
             tryLocalStream();
 
             // Connect WebRTC peer channel to iPhone
             if (peer && !peer.destroyed) {
-                const conn = peer.connect('iphone_' + room);
+                const conn = peer.connect('iphone_WESLA');
                 conn.on('open', () => {
                     console.log('Connected to iPhone signaling channel');
                     conn.send({ type: 'request_stream' });
@@ -385,24 +391,25 @@
         }
 
         function playMediaDirectly() {
-            statusText.innerText = 'Connecting to iPhone media library...';
+            const host = getCustomHost();
+            statusText.innerText = 'Connecting to media at ' + host + '...';
             img.style.display = 'none';
             video.style.display = 'block';
 
-            // Stream directly from the iPhone's internal web server
             const streamEndpoints = [
-                'http://wes.local:8080/sample.mp4',
+                'http://' + host + ':8080/sample.mp4',
                 'http://172.20.10.1:8080/sample.mp4',
+                'http://wes.local:8080/sample.mp4',
                 'http://192.0.0.1:8080/sample.mp4'
             ];
 
             function tryEndpoint(index) {
                 if (index >= streamEndpoints.length) {
-                    statusText.innerText = 'Could not reach iPhone media server. Is WeslaMirror open?';
+                    statusText.innerText = 'Could not reach iPhone media server at ' + host;
                     return;
                 }
                 const url = streamEndpoints[index];
-                statusText.innerText = 'Streaming from iPhone: ' + url;
+                statusText.innerText = 'Trying: ' + url;
                 video.src = url;
                 video.play().then(() => {
                     console.log('Successfully streaming video from iPhone:', url);
@@ -416,20 +423,37 @@
             tryEndpoint(0);
         }
 
+        let isStreamActive = false;
+        let pollTimer = null;
+
         function tryLocalStream() {
+            const host = getCustomHost();
             const candidateUrls = [
-                'http://wes.local:81/?t=',
+                'http://' + host + ':81/?t=',
                 'http://172.20.10.1:81/?t=',
+                'http://wes.local:81/?t=',
                 'http://192.0.0.1:81/?t='
             ];
 
             function testNext(index) {
-                if (index >= candidateUrls.length) return;
+                if (isStreamActive) return;
+                if (index >= candidateUrls.length) {
+                    statusText.innerText = 'Waiting for iPhone broadcast (check hotspot & app)...';
+                    // Auto retry polling every 2 seconds until connected
+                    if (!pollTimer) {
+                        pollTimer = setTimeout(() => {
+                            pollTimer = null;
+                            if (!isStreamActive) tryLocalStream();
+                        }, 2000);
+                    }
+                    return;
+                }
                 const testImg = new Image();
                 const target = candidateUrls[index] + new Date().getTime();
                 
                 testImg.onload = function() {
                     console.log('Local stream active at:', candidateUrls[index]);
+                    isStreamActive = true;
                     img.src = target;
                     img.style.display = 'block';
                     video.style.display = 'none';
