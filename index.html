@@ -253,7 +253,7 @@
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
 
-        let currentRotation = 180; // 0, 90, 180, 270 (180 is upright for vertical stream)
+        let currentRotation = 0; // 0, 90, 180, 270
 
         function applyRotation() {
             video.className = 'rot-' + currentRotation;
@@ -371,8 +371,8 @@
                             // Landscape orientation: flipped 180
                             currentRotation = data.orientation === 3 ? 90 : 270;
                         } else {
-                            // Vertical / Portrait orientation: flipped 180
-                            currentRotation = 180;
+                            // Vertical / Portrait orientation: flip back 180 to 0
+                            currentRotation = 0;
                         }
                         applyRotation();
                     }
@@ -441,15 +441,15 @@
                         window._aspectInterval = setInterval(() => {
                             if (img.naturalWidth && img.naturalHeight) {
                                 if (img.naturalWidth > img.naturalHeight) {
-                                    // Wide buffer (landscape) -> flip 180
+                                    // Wide buffer (landscape) -> rotated 180 degrees
                                     if (currentRotation !== 180) {
                                         currentRotation = 180;
                                         applyRotation();
                                     }
                                 } else {
-                                    // Tall buffer (vertical/portrait) -> flip 180
-                                    if (currentRotation !== 180) {
-                                        currentRotation = 180;
+                                    // Tall buffer (vertical/portrait) -> flip back 180 to 0 degrees
+                                    if (currentRotation !== 0) {
+                                        currentRotation = 0;
                                         applyRotation();
                                     }
                                 }
