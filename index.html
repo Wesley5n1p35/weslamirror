@@ -164,7 +164,7 @@
 </head>
 <body>
     <div id="videoContainer">
-        <video id="remoteVideo" autoplay playsinline></video>
+        <video id="remoteVideo" controls autoplay playsinline></video>
         <img id="remoteImg" style="display:none; width: 100%; height: 100%; object-fit: contain;" alt="Mirror stream" />
     </div>
 
@@ -295,6 +295,23 @@
                     setConnectedState(false);
                 });
             }
+        }
+
+        function playMediaDirectly() {
+            statusText.innerText = 'Loading media player...';
+            const img = document.getElementById('remoteImg');
+            img.style.display = 'none';
+            video.style.display = 'block';
+            video.src = 'sample.mp4';
+            video.play().then(() => {
+                setConnectedState(true);
+            }).catch(e => {
+                console.log('Video error:', e);
+                // Fallback to local server sample
+                video.src = 'http://wes.local:8080/sample.mp4';
+                video.play().catch(err => console.log('Local stream fallback error:', err));
+                setConnectedState(true);
+            });
         }
 
         function tryLocalStream() {
