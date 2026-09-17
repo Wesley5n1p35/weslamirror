@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WeslaMirror</title>
+    <!-- PeerJS for ultra-simple, zero-config WebRTC peer-to-peer connection -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: #0d0e12;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #videoContainer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: black;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .overlay {
+            position: absolute;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(18, 20, 29, 0.85);
+            backdrop-filter: blur(20px);
+            padding: 30px 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            transition: opacity 0.4s ease;
+        }
+
+        .overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #007AFF, #00d2ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            font-size: 15px;
+            color: #8e8e93;
+            margin-bottom: 24px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff9500;
+        }
+
+        .dot.connected {
+            background: #34c759;
+            box-shadow: 0 0 10px #34c759;
+        }
+
+        .code-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input {
+            width: 160px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            font-size: 20px;
+            font-weight: 700;
+            text-align: center;
+            letter-spacing: 2px;
+            outline: none;
+            text-transform: uppercase;
+        }
+
+        button {
+            height: 48px;
+            padding: 0 24px;
+            border-radius: 12px;
+            border: none;
+            background: #007AFF;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:active {
+            transform: scale(0.97);
+            background: #0062cc;
+        }
+
+        .floating-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 30;
+            display: flex;
+            gap: 12px;
+            opacity: 0.3;
+            transition: opacity 0.2s ease;
+        }
+
+        .floating-controls:hover {
+            opacity: 1;
+        }
+
+        .icon-btn {
+            background: rgba(20, 20, 20, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div id="videoContainer">
+        <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+
+    <div id="overlay" class="overlay">
+        <h1>WeslaMirror</h1>
+        <p class="subtitle">Tesla Screen Mirroring & Media Player</p>
+
+        <div class="status-badge">
+            <span id="statusDot" class="dot"></span>
+            <span id="statusText">Waiting for iPhone connection...</span>
+        </div>
+
+        <div class="code-input-group">
+            <input type="text" id="roomInput" value="WESLA" placeholder="ROOM" maxlength="8">
+            <button id="connectBtn" onclick="connectToRoom()">Connect</button>
+        </div>
+
+        <p style="font-size: 13px; color: #636366;">Ensure iPhone is broadcasting screen via WeslaMirror</p>
+    </div>
+
+    <div class="floating-controls">
+        <button class="icon-btn" onclick="toggleFit()">Fit / Fill</button>
+        <button class="icon-btn" onclick="toggleOverlay()">Menu</button>
+        <button class="icon-btn" onclick="toggleFullscreen()">Fullscreen</button>
+    </div>
+
+    <script>
+        let peer = null;
+        let activeCall = null;
+        const video = document.getElementById('remoteVideo');
+        const overlay = document.getElementById('overlay');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        // Check URL parameters for room code e.g. ?room=WESLA
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialRoom = (urlParams.get('room') || 'WESLA').toUpperCase();
+        document.getElementById('roomInput').value = initialRoom;
+
+        function initPeer() {
+            const teslaPeerId = 'tesla_' + Math.random().toString(36).substr(2, 6);
+            peer = new Peer(teslaPeerId, {
+                debug: 1,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                console.log('Tesla Browser Peer ready:', id);
+                connectToRoom();
+            });
+
+            peer.on('call', (call) => {
+                console.log('Incoming stream call from iPhone');
+                call.answer(); // Answer with no back stream
+                call.on('stream', (remoteStream) => {
+                    console.log('Got remote stream!');
+                    video.srcObject = remoteStream;
+                    video.play().catch(e => console.log('Autoplay handled:', e));
+                    setConnectedState(true);
+                });
+                activeCall = call;
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                statusText.innerText = 'Connection error: ' + err.type;
+            });
+        }
+
+        function connectToRoom() {
+            const room = document.getElementById('roomInput').value.trim().toUpperCase();
+            if (!room || !peer) return;
+
+            statusText.innerText = 'Connecting to iPhone (' + room + ')...';
+            statusDot.className = 'dot';
+
+            // Connect data channel to iPhone peer to request screen stream
+            const conn = peer.connect('iphone_' + room);
+            conn.on('open', () => {
+                console.log('Connected to iPhone signaling channel');
+                conn.send({ type: 'request_stream' });
+                statusText.innerText = 'Connected! Starting stream...';
+            });
+
+            conn.on('data', (data) => {
+                console.log('Received data from iPhone:', data);
+            });
+
+            conn.on('close', () => {
+                setConnectedState(false);
+            });
+        }
+
+        function setConnectedState(connected) {
+            if (connected) {
+                statusDot.className = 'dot connected';
+                statusText.innerText = 'Mirroring Active';
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 1500);
+            } else {
+                statusDot.className = 'dot';
+                statusText.innerText = 'Waiting for iPhone broadcast...';
+                overlay.classList.remove('hidden');
+            }
+        }
+
+        function toggleFit() {
+            video.style.objectFit = video.style.objectFit === 'cover' ? 'contain' : 'cover';
+        }
+
+        function toggleOverlay() {
+            overlay.classList.toggle('hidden');
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => alert(err.message));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Initialize peer connection on load
+        window.addEventListener('load', initPeer);
+    </script>
+</body>
+</html>
