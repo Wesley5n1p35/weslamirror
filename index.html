@@ -433,6 +433,18 @@
                     img.style.display = 'block';
                     video.style.display = 'none';
                     setConnectedState(true);
+                    
+                    // Periodic aspect ratio checker for live MJPEG stream
+                    if (!window._aspectInterval) {
+                        window._aspectInterval = setInterval(() => {
+                            if (img.naturalWidth && img.naturalHeight) {
+                                if (img.naturalWidth > img.naturalHeight && currentRotation !== 0) {
+                                    currentRotation = 0;
+                                    applyRotation();
+                                }
+                            }
+                        }, 1000);
+                    }
                 };
                 testImg.onerror = function() {
                     testNext(index + 1);
