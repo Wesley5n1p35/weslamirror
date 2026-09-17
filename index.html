@@ -142,7 +142,7 @@
             z-index: 30;
             display: flex;
             gap: 12px;
-            opacity: 0.3;
+            opacity: 0.5;
             transition: opacity 0.2s ease;
         }
 
@@ -151,14 +151,46 @@
         }
 
         .icon-btn {
-            background: rgba(20, 20, 20, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(20, 20, 20, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             color: white;
             padding: 10px 16px;
             border-radius: 10px;
             font-size: 14px;
             cursor: pointer;
             backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+        
+        .icon-btn:active {
+            transform: scale(0.95);
+            background: #007AFF;
+        }
+
+        /* Rotation helper classes */
+        .rot-0 {
+            transform: rotate(0deg);
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+        .rot-90 {
+            transform: rotate(90deg);
+            width: 100vh !important;
+            height: 100vw !important;
+            max-width: none !important;
+            max-height: none !important;
+        }
+        .rot-180 {
+            transform: rotate(180deg);
+            max-width: 100vw;
+            max-height: 100vh;
+        }
+        .rot-270 {
+            transform: rotate(270deg);
+            width: 100vh !important;
+            height: 100vw !important;
+            max-width: none !important;
+            max-height: none !important;
         }
     </style>
 </head>
@@ -177,7 +209,7 @@
             <span id="statusText">Waiting for iPhone connection...</span>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; width: 100%;">
             <button id="tabMedia" style="flex: 1; background: #007AFF;" onclick="selectMode('media')">Play Video Media</button>
             <button id="tabMirror" style="flex: 1; background: rgba(255,255,255,0.15);" onclick="selectMode('mirror')">Screen Mirror</button>
         </div>
@@ -191,18 +223,49 @@
     </div>
 
     <div class="floating-controls">
-        <button class="icon-btn" onclick="toggleFit()">Fit / Fill</button>
-        <button class="icon-btn" onclick="toggleOverlay()">Menu</button>
-        <button class="icon-btn" onclick="toggleFullscreen()">Fullscreen</button>
+        <button class="icon-btn" onclick="cycleRotate()">🔄 Rotate 90°</button>
+        <button class="icon-btn" onclick="flip180()">🔃 Flip 180°</button>
+        <button class="icon-btn" onclick="toggleFit()">↔️ Fit / Fill</button>
+        <button class="icon-btn" onclick="toggleOverlay()">⚙️ Menu</button>
+        <button class="icon-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
     </div>
 
     <script>
         let peer = null;
         let activeCall = null;
         const video = document.getElementById('remoteVideo');
+        const img = document.getElementById('remoteImg');
         const overlay = document.getElementById('overlay');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
+
+        let currentRotation = 0; // 0, 90, 180, 270
+
+        function applyRotation() {
+            const rotClass = 'rot-' + currentRotation;
+            video.className = rotClass;
+            img.className = rotClass;
+        }
+
+        function cycleRotate() {
+            currentRotation = (currentRotation + 90) % 360;
+            applyRotation();
+        }
+
+        function flip180() {
+            currentRotation = (currentRotation + 180) % 360;
+            applyRotation();
+        }
+
+        // Auto-detect aspect ratio adjustments
+        video.addEventListener('loadedmetadata', () => {
+            console.log(`Video loaded: ${video.videoWidth}x${video.videoHeight}`);
+            if (video.videoWidth > video.videoHeight) {
+                // Native landscape media
+                currentRotation = 0;
+                applyRotation();
+            }
+        });
 
         // Check URL parameters for room code e.g. ?room=WESLA
         const urlParams = new URLSearchParams(window.location.search);
@@ -289,6 +352,15 @@
 
                 conn.on('data', (data) => {
                     console.log('Received data from iPhone:', data);
+                    if (data && data.orientation !== undefined) {
+                        // ReplayKit orientation: 1 = Portrait, 3 = LandscapeRight, 4 = LandscapeLeft
+                        if (data.orientation === 3 || data.orientation === 4) {
+                            currentRotation = data.orientation === 3 ? 90 : 270;
+                        } else {
+                            currentRotation = 0;
+                        }
+                        applyRotation();
+                    }
                 });
 
                 conn.on('close', () => {
@@ -299,7 +371,6 @@
 
         function playMediaDirectly() {
             statusText.innerText = 'Connecting to iPhone media library...';
-            const img = document.getElementById('remoteImg');
             img.style.display = 'none';
             video.style.display = 'block';
 
@@ -331,7 +402,6 @@
         }
 
         function tryLocalStream() {
-            const img = document.getElementById('remoteImg');
             const candidateUrls = [
                 'http://wes.local:81/?t=',
                 'http://172.20.10.1:81/?t=',
@@ -361,19 +431,22 @@
         function setConnectedState(connected) {
             if (connected) {
                 statusDot.className = 'dot connected';
-                statusText.innerText = 'Mirroring Active';
+                statusText.innerText = 'Playback Active';
                 setTimeout(() => {
                     overlay.classList.add('hidden');
                 }, 1500);
             } else {
                 statusDot.className = 'dot';
-                statusText.innerText = 'Waiting for iPhone broadcast...';
+                statusText.innerText = 'Waiting for iPhone...';
                 overlay.classList.remove('hidden');
             }
         }
 
         function toggleFit() {
-            video.style.objectFit = video.style.objectFit === 'cover' ? 'contain' : 'cover';
+            const currentFit = video.style.objectFit || 'contain';
+            const nextFit = currentFit === 'cover' ? 'contain' : 'cover';
+            video.style.objectFit = nextFit;
+            img.style.objectFit = nextFit;
         }
 
         function toggleOverlay() {
