@@ -298,20 +298,36 @@
         }
 
         function playMediaDirectly() {
-            statusText.innerText = 'Loading media player...';
+            statusText.innerText = 'Connecting to iPhone media library...';
             const img = document.getElementById('remoteImg');
             img.style.display = 'none';
             video.style.display = 'block';
-            video.src = 'sample.mp4';
-            video.play().then(() => {
-                setConnectedState(true);
-            }).catch(e => {
-                console.log('Video error:', e);
-                // Fallback to local server sample
-                video.src = 'http://wes.local:8080/sample.mp4';
-                video.play().catch(err => console.log('Local stream fallback error:', err));
-                setConnectedState(true);
-            });
+
+            // Stream directly from the iPhone's internal web server
+            const streamEndpoints = [
+                'http://wes.local:8080/sample.mp4',
+                'http://172.20.10.1:8080/sample.mp4',
+                'http://192.0.0.1:8080/sample.mp4'
+            ];
+
+            function tryEndpoint(index) {
+                if (index >= streamEndpoints.length) {
+                    statusText.innerText = 'Could not reach iPhone media server. Is WeslaMirror open?';
+                    return;
+                }
+                const url = streamEndpoints[index];
+                statusText.innerText = 'Streaming from iPhone: ' + url;
+                video.src = url;
+                video.play().then(() => {
+                    console.log('Successfully streaming video from iPhone:', url);
+                    setConnectedState(true);
+                }).catch(err => {
+                    console.log('Failed endpoint ' + url + ':', err);
+                    tryEndpoint(index + 1);
+                });
+            }
+
+            tryEndpoint(0);
         }
 
         function tryLocalStream() {
