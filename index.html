@@ -224,8 +224,8 @@
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 20px; width: 100%;">
-            <button id="tabMedia" style="flex: 1; background: #007AFF;" onclick="selectMode('media')">Play Video Media</button>
-            <button id="tabMirror" style="flex: 1; background: rgba(255,255,255,0.15);" onclick="selectMode('mirror')">Screen Mirror</button>
+            <button id="tabMirror" style="flex: 1; background: #007AFF;" onclick="selectMode('mirror')">Screen Mirror</button>
+            <button id="tabMedia" style="flex: 1; background: rgba(255,255,255,0.15);" onclick="selectMode('media')">Play Video Media</button>
         </div>
 
         <div class="code-input-group">
@@ -233,7 +233,7 @@
             <button id="connectBtn" onclick="connectToRoom()">Start</button>
         </div>
 
-        <p id="modeHint" style="font-size: 13px; color: #8e8e93;">Direct local media playback — no screen broadcast needed!</p>
+        <p id="modeHint" style="font-size: 13px; color: #8e8e93;">Full iPhone screen mirror — start broadcast in WeslaMirror app.</p>
     </div>
 
     <div class="floating-controls">
@@ -256,9 +256,8 @@
         let currentRotation = 0; // 0, 90, 180, 270
 
         function applyRotation() {
-            const rotClass = 'rot-' + currentRotation;
-            video.className = rotClass;
-            img.className = rotClass;
+            video.className = 'rot-' + currentRotation;
+            img.className = 'rot-' + currentRotation;
         }
 
         function cycleRotate() {
@@ -275,7 +274,7 @@
         video.addEventListener('loadedmetadata', () => {
             console.log(`Video loaded: ${video.videoWidth}x${video.videoHeight}`);
             if (video.videoWidth > video.videoHeight) {
-                // Native landscape media
+                // Native landscape media is already upright
                 currentRotation = 0;
                 applyRotation();
             }
@@ -321,7 +320,7 @@
             });
         }
 
-        let currentMode = 'media';
+        let currentMode = 'mirror';
 
         function selectMode(mode) {
             currentMode = mode;
@@ -434,16 +433,10 @@
                     video.style.display = 'none';
                     setConnectedState(true);
                     
-                    // Periodic aspect ratio checker for live MJPEG stream
-                    if (!window._aspectInterval) {
-                        window._aspectInterval = setInterval(() => {
-                            if (img.naturalWidth && img.naturalHeight) {
-                                if (img.naturalWidth > img.naturalHeight && currentRotation !== 0) {
-                                    currentRotation = 0;
-                                    applyRotation();
-                                }
-                            }
-                        }, 1000);
+                    // Stream active
+                    if (window._aspectInterval) {
+                        clearInterval(window._aspectInterval);
+                        window._aspectInterval = null;
                     }
                 };
                 testImg.onerror = function() {
