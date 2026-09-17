@@ -253,7 +253,7 @@
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
 
-        let currentRotation = 0; // 0, 90, 180, 270
+        let currentRotation = 180; // 0, 90, 180, 270 (180 is upright for vertical stream)
 
         function applyRotation() {
             video.className = 'rot-' + currentRotation;
@@ -368,10 +368,11 @@
                     if (data && data.orientation !== undefined) {
                         // ReplayKit orientation: 1 = Portrait, 3 = LandscapeRight, 4 = LandscapeLeft
                         if (data.orientation === 3 || data.orientation === 4) {
-                            // Inverted by 180 so landscape is upright
-                            currentRotation = data.orientation === 3 ? 270 : 90;
+                            // Landscape orientation: flipped 180
+                            currentRotation = data.orientation === 3 ? 90 : 270;
                         } else {
-                            currentRotation = 0;
+                            // Vertical / Portrait orientation: flipped 180
+                            currentRotation = 180;
                         }
                         applyRotation();
                     }
@@ -432,19 +433,28 @@
                     img.src = target;
                     img.style.display = 'block';
                     video.style.display = 'none';
+                    applyRotation();
                     setConnectedState(true);
                     
                     // Periodic aspect ratio checker for live MJPEG stream
                     if (!window._aspectInterval) {
                         window._aspectInterval = setInterval(() => {
                             if (img.naturalWidth && img.naturalHeight) {
-                                // If image arrives as wide buffer and is upside-down, rot-180 keeps it upright!
-                                if (img.naturalWidth > img.naturalHeight && currentRotation === 0) {
-                                    currentRotation = 180;
-                                    applyRotation();
+                                if (img.naturalWidth > img.naturalHeight) {
+                                    // Wide buffer (landscape) -> flip 180
+                                    if (currentRotation !== 180) {
+                                        currentRotation = 180;
+                                        applyRotation();
+                                    }
+                                } else {
+                                    // Tall buffer (vertical/portrait) -> flip 180
+                                    if (currentRotation !== 180) {
+                                        currentRotation = 180;
+                                        applyRotation();
+                                    }
                                 }
                             }
-                        }, 1000);
+                        }, 600);
                     }
                 };
                 testImg.onerror = function() {
