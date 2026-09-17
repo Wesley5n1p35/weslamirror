@@ -368,7 +368,8 @@
                     if (data && data.orientation !== undefined) {
                         // ReplayKit orientation: 1 = Portrait, 3 = LandscapeRight, 4 = LandscapeLeft
                         if (data.orientation === 3 || data.orientation === 4) {
-                            currentRotation = data.orientation === 3 ? 90 : 270;
+                            // Inverted by 180 so landscape is upright
+                            currentRotation = data.orientation === 3 ? 270 : 90;
                         } else {
                             currentRotation = 0;
                         }
@@ -433,10 +434,17 @@
                     video.style.display = 'none';
                     setConnectedState(true);
                     
-                    // Stream active
-                    if (window._aspectInterval) {
-                        clearInterval(window._aspectInterval);
-                        window._aspectInterval = null;
+                    // Periodic aspect ratio checker for live MJPEG stream
+                    if (!window._aspectInterval) {
+                        window._aspectInterval = setInterval(() => {
+                            if (img.naturalWidth && img.naturalHeight) {
+                                // If image arrives as wide buffer and is upside-down, rot-180 keeps it upright!
+                                if (img.naturalWidth > img.naturalHeight && currentRotation === 0) {
+                                    currentRotation = 180;
+                                    applyRotation();
+                                }
+                            }
+                        }, 1000);
                     }
                 };
                 testImg.onerror = function() {
